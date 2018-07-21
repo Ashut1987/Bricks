@@ -1,0 +1,438 @@
+﻿
+@{
+    ViewBag.Title = "Bricks Game";
+}
+
+@Scripts.Render("~/bundles/bricks")
+
+<link href="~/Content/bricks.css" rel="stylesheet" />
+
+@if (Request.IsAuthenticated)
+{
+    <script>
+            appInsights.setAuthenticatedUserContext("@User.Identity.Name.Replace("\\", "\\\\")"
+               .replace(/[,;=| ]+/g, "_"));
+    </script>
+}
+<!--
+    To collect end-user usage analytics about your application,
+    insert the following script into each page you want to track.
+    Place this code immediately before the closing </head> tag,
+    and before any other scripts. Your first data will appear
+    automatically in just a few seconds.
+-->
+<script type="text/javascript">
+    var appInsights = window.appInsights || function (a) {
+        function b(a) { c[a] = function () { var b = arguments; c.queue.push(function () { c[a].apply(c, b) }) } } var c = { config: a }, d = document, e = window; setTimeout(function () { var b = d.createElement("script"); b.src = a.url || "https://az416426.vo.msecnd.net/scripts/a/ai.0.js", d.getElementsByTagName("script")[0].parentNode.appendChild(b) }); try { c.cookie = d.cookie } catch (a) { } c.queue = []; for (var f = ["Event", "Exception", "Metric", "PageView", "Trace", "Dependency"]; f.length;)b("track" + f.pop()); if (b("setAuthenticatedUserContext"), b("clearAuthenticatedUserContext"), b("startTrackEvent"), b("stopTrackEvent"), b("startTrackPage"), b("stopTrackPage"), b("flush"), !a.disableExceptionTracking) { f = "onerror", b("_" + f); var g = e[f]; e[f] = function (a, b, d, e, h) { var i = g && g(a, b, d, e, h); return !0 !== i && c["_" + f](a, b, d, e, h), i } } return c
+    }({
+        instrumentationKey: "3f7ea15f-c107-438d-b60c-72ca3f1f2698"
+    });
+
+    window.appInsights = appInsights, appInsights.queue && 0 === appInsights.queue.length && appInsights.trackPageView();
+</script>
+<script type="text/javascript">
+
+    var gameState = new FSM("intro");
+    var speed = 1000;
+    var initialLevel = 0;
+    var updatedLevel = 0;
+
+    gameState.add_transition("play", "intro", changeIntroToPlaying, "playing");
+    gameState.add_transition("pause", "playing", changePlayingToPaused, "paused");
+    gameState.add_transition("continue", "paused", changePausedToPlaying, "playing");
+    gameState.add_transition("end", "playing", changePlayingToGameOver, "gameOver");
+    gameState.add_transition("showIntro", "gameOver", changeGameOverToIntro, "intro");
+
+    function changeIntroToPlaying() {
+        initialLevel = 0;
+        updatedLevel = 0;
+        speed = 1000;
+        initializeBoard();
+        $('.subTitle').css('visibility', 'hidden');
+        $('.press').css('visibility', 'hidden');
+
+        $('.title').animate({
+            top: 0
+        }, 1000, 'swing', function () {
+            // Animation complete.
+            $('.scorePanel').animate({
+                opacity: 1.0
+            }, 1000, 'swing', function () {
+                $('.scorePanel').css('visibility', 'visible');
+            });
+
+            $('.board').animate({
+                opacity: 1.0
+            }, 1000, 'swing', function () {
+                $('.board').css('visibility', 'visible');
+            });
+        });
+    }
+
+    function changePlayingToPaused() {
+        $('#gamePaused').css('visibility', 'visible');
+    }
+
+    function changePausedToPlaying() {
+        $('#gamePaused').css('visibility', 'hidden');
+    }
+
+    function changePlayingToGameOver() {
+        $('#gameOver').css('visibility', 'visible');
+    }
+
+    function changeGameOverToIntro() {
+        $('#gameOver').css('visibility', 'hidden');
+
+        $('.scorePanel').animate({
+            opacity: 0.0
+        }, 1000, 'swing', function () {
+            $('.scorePanel').css('visibility', 'hidden');
+        });
+
+        $('.board').animate({
+            opacity: 0.0
+        }, 1000, 'swing', function () {
+            // Animation complete.
+            $('.board').css('visibility', 'hidden');
+            $('.title').animate({
+                top: 200
+            }, 1000, 'swing', function () {
+                // Animation complete.
+                $('.subTitle').css('visibility', 'visible');
+                $('.press').css('visibility', 'visible');
+            });
+        });
+    }
+
+    $(function () {
+        createCells();
+        setImages();
+        showSplashScreen();
+        initializeBoard();
+        setTimer();
+    });
+
+    function createCells() {
+        for (var row = 0; row < 16; row++) {
+            for (var col = 0; col < 10; col++) {
+                var divId = 'cell_' + row + '_' + col;
+                var imgId = 'img_' + row + '_' + col;
+                var divTag = '<div id="' + divId + '" name="brick" class="colorChip clearfix"></div>';
+                $(divTag).appendTo('.board');
+            }
+            $('<div class="clear">').appendTo('.board');
+            $('</div>').appendTo('.board');
+        }
+
+        for (var row = 0; row < 2; row++) {
+            for (var col = 0; col < 4; col++) {
+                var divId = 'next_' + row + '_' + col;
+                var imgId = 'nextImg_' + row + '_' + col;
+                var divTag = '<div id="' + divId + '" name="brick" class="colorChip clearfix"></div>';
+                $(divTag).appendTo('#divNext');
+            }
+            $('<div class="clear">').appendTo('#divNext');
+            $('</div>').appendTo('#divNext');
+        }
+    }
+
+    function setImages() {
+        $('img[class="image"]').each(function (idx, el) {
+            $('#' + el.id).attr('src', '../../Content/images/None.png');
+        });
+    }
+
+    function showSplashScreen() {
+        $('.subTitle').css('visibility', 'hidden');
+        $('.press').css('visibility', 'hidden');
+        $('.title').animate({
+            top: 200
+        }, 1000, 'swing', function () {
+            // Animation complete.
+            $('.subTitle').css('visibility', 'visible');
+            $('.press').css('visibility', 'visible');
+        });
+    }
+
+
+    var tickTimer = function () {
+        $.ajax({
+            type: "GET",
+            url: "/Bricks/Tick",
+            cache: false,
+            dataType: "json",
+            error: function (xhr, status, error) {
+                //                        alert(xhr.status);
+            },
+            success: function (json) {
+            }
+        });
+    }
+
+    function setTimer() {
+
+        var getBoardTimer = function () {
+            if (gameState.current_state == 'playing') {
+
+                $.ajax({
+                    type: "GET",
+                    url: "/Bricks/GetBoard",
+                    cache: false,
+                    //                    data: {},
+                    dataType: "json",
+                    error: function (xhr, status, error) {
+                        // you may need to handle me if the json is invalid
+                        // this is the ajax object
+                        //                        alert(xhr.status);
+                        //                        alert(error);
+                    },
+                    success: function (json) {
+
+                        if (json.IsGameOver) {
+                            gameState.process('end');
+                        }
+                        else {
+                            $('#divScore').text(json.Score);
+                            $('#divHiScore').text(json.HiScore);
+                            $('#divLines').text(json.Lines);
+                            $('#divLevel').text(json.Level);
+
+                            if (json.Level != undefined || json.Level != null) {
+                                
+                                updatedLevel = json.Level;
+                                if (updatedLevel == undefined || updatedLevel <= 1) {
+                                    updatedLevel = 1;
+                                }
+                                if (initialLevel != updatedLevel) {
+                                    initialLevel = updatedLevel;
+                                    clearInterval(tickTimer);
+
+                                    speed = (1000 - Math.abs(initialLevel - 1) * 100);
+                                    if (speed <= 300) speed = 300;
+
+                                    console.log('Updated level: ' + initialLevel);
+                                    console.log('updated speed: ' + speed);
+
+                                    tickInterval = setInterval(tickTimer, speed);
+
+                                }
+                            }
+
+                            $.each(json.Bricks, function (i, val) {
+                                //                                    $('#img_' + val.Row + '_' + val.Col).attr('src', '../../Content/images/' + val.Color + '.png');
+                                $('#cell_' + val.Row + '_' + val.Col).css('background-image', '-webkit-gradient(linear, left top, right bottom, color-stop(0.0, ' + val.Color + '), color-stop(1.0, rgba(0, 0, 0, 0.0)))');
+                                $('#cell_' + val.Row + '_' + val.Col).css('border-color', val.Color);
+                            });
+
+                            for (var row = 0; row < 2; row++) {
+                                for (var col = 0; col < 4; col++) {
+                                    $('#next_' + row + '_' + col).css('background-image', '-webkit-gradient(linear, left top, right bottom, color-stop(0.0, #000), color-stop(1.0, #000))');
+                                    $('#next_' + row + '_' + col).css('border-color', '#333');
+                                }
+                            }
+
+                            $.each(json.Next, function (i, val) {
+                                $('#next_' + val.Row + '_' + val.Col).css('background-image', '-webkit-gradient(linear, left top, right bottom, color-stop(0.0, ' + val.Color + '), color-stop(1.0, rgba(0, 0, 0, 0.0)))');
+                                $('#next_' + val.Row + '_' + val.Col).css('border-color', val.Color);
+                            });
+                        }
+                    }
+                });
+            }
+        }
+
+        var tickInterval = setInterval(tickTimer, 1000);
+
+        var getBoardInterval = setInterval(getBoardTimer, 500);
+
+        $(document).keydown(function (event) {
+            switch (event.keyCode) {
+                case 27: //esc
+                    gameState.process('end');
+                case 32: //space
+                    if (gameState.current_state == 'intro') {
+                        gameState.process('play');
+                    }
+                    else if (gameState.current_state == 'paused') {
+                        appInsights.trackEvent("Paused");
+                        gameState.process('continue');
+                    }
+                    else if (gameState.current_state == 'gameOver') {
+                        appInsights.trackEvent("GameOver");
+                        gameState.process('showIntro');
+                    }
+                    else {
+                        gameState.process('pause');
+                    }
+                    break;
+                case 37: //left
+                    if (gameState.current_state == 'playing')
+                        moveLeft();
+                    break;
+                case 38: //up
+                    if (gameState.current_state == 'playing')
+                        moveUp();
+                    break;
+                case 39: //right
+                    if (gameState.current_state == 'playing')
+                        moveRight();
+                    break;
+                case 40: //down
+                    if (gameState.current_state == 'playing')
+                        moveDown();
+                    break;
+            }
+        });
+    }
+
+    function moveLeft() {
+        $.ajax({
+            type: "GET",
+            url: "/Bricks/MoveLeft",
+            cache: false,
+            dataType: "json",
+            error: function (xhr, status, error) {
+                //                    alert(xhr.status);
+            },
+            success: function (json) {
+            }
+        });
+    }
+
+    function moveRight() {
+        $.ajax({
+            type: "GET",
+            url: "/Bricks/MoveRight",
+            cache: false,
+            dataType: "json",
+            error: function (xhr, status, error) {
+                //                    alert(xhr.status);
+            },
+            success: function (json) {
+            }
+        });
+    }
+
+    function moveUp() {
+        $.ajax({
+            type: "GET",
+            url: "/Bricks/MoveUp",
+            cache: false,
+            dataType: "json",
+            error: function (xhr, status, error) {
+                //                    alert(xhr.status);
+            },
+            success: function (json) {
+            }
+        });
+    }
+
+    function moveDown() {
+        $.ajax({
+            type: "GET",
+            url: "/Bricks/MoveDown",
+            cache: false,
+            dataType: "json",
+            error: function (xhr, status, error) {
+                //                    alert(xhr.status);
+            },
+            success: function (json) {
+            }
+        });
+    }
+
+    function initializeBoard() {
+        var shapeParam = $('#shapes').find(":selected").text();
+        var genderParam = $('#gender').find(":selected").text();
+
+        $.ajax({
+            type: "GET",
+            url: "/Bricks/InitializeBoard?shape=" + shapeParam + "&gender=" + genderParam,
+            cache: false,
+            dataType: "json",
+            error: function (xhr, status, error) {
+                alert(xhr.status);
+            },
+            success: function (json) {
+
+
+            }
+        });
+    }
+</script>
+
+
+<br />
+<div class="screen">
+    <div id="title" class="title">
+        <img src="../../Content/images/Title.png" />
+        <div class="subTitle">
+            <div>
+                <span>Prefered Shape:</span>
+                <span>
+                    <select id="shapes">
+                        <option>I</option>
+                        <option>J</option>
+                        <option>L</option>
+                        <option>O</option>
+                        <option>S</option>
+                        <option>T</option>
+                        <option>Z</option>
+                        <option selected="selected">T</option>
+                    </select>
+                </span>
+                <span>Gender:</span>
+                <span>
+                    <select id="gender">
+                        <option selected="selected">Male</option>
+                        <option>Female</option>
+                    </select>
+                </span>
+            </div>
+            @*Made for The Code Project<img src="../../Content/images/Bob.png" class="bob" />*@
+        </div>
+        <br />
+        <div class="press">Press SPACE to start game!</div>
+    </div>
+    <div class="centerPanel">
+        <div class="board">
+        </div>
+        <div class="scorePanel">
+            <div>
+                Score
+            </div>
+            <div id="divScore" class="scoreText">000000</div>
+            <br />
+            <div>
+                HiScore
+            </div>
+            <div id="divHiScore" class="scoreText">000000</div>
+            <br />
+            <div>
+                Lines
+            </div>
+            <div id="divLines" class="scoreText">0</div>
+            <br />
+            <div>
+                Level
+            </div>
+            <div id="divLevel" class="scoreText">0</div>
+            <br />
+            <div>
+                Next
+            </div>
+            <div id="divNext" class="scoreText"></div>
+
+        </div>
+    </div>
+    <div id="gamePaused">
+        GAME PAUSED<br />Press SPACE to continue!
+    </div>
+</div>
+<div id="gameOver">
+    GAME OVER<br />Press SPACE to restart!
+</div>
+    </div>
+    </div>
+

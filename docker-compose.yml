@@ -1,0 +1,8 @@
+version: '3'
+
+services:
+  bricks:
+    image: bricks
+    build:
+      context: .\Bricks
+      dockerfile: Dockerfile
